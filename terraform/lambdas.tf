@@ -1,0 +1,260 @@
+# ── IAM Role ───────────────────────────────────────────────────────
+
+data "aws_iam_policy_document" "lambda_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "lambda" {
+  name               = "${local.name_prefix}-lambda-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
+}
+
+data "aws_iam_policy_document" "lambda_permissions" {
+  # CloudWatch Logs
+  statement {
+    actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["arn:aws:logs:*:*:*"]
+  }
+
+  # DynamoDB
+  statement {
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query",
+    ]
+    resources = [aws_dynamodb_table.lectures.arn]
+  }
+
+  # S3
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = ["${aws_s3_bucket.uploads.arn}/*"]
+  }
+
+  # Bedrock
+  statement {
+    actions   = ["bedrock:InvokeModel"]
+    resources = ["arn:aws:bedrock:${var.region}::foundation-model/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "lambda" {
+  name   = "${local.name_prefix}-lambda-policy"
+  role   = aws_iam_role.lambda.id
+  policy = data.aws_iam_policy_document.lambda_permissions.json
+}
+
+# ── Lambda Layer (shared code) ─────────────────────────────────────
+
+data "archive_file" "shared_layer" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/layer"
+  output_path = "${path.module}/.build/layer.zip"
+}
+
+resource "aws_lambda_layer_version" "shared" {
+  layer_name          = "${local.name_prefix}-shared"
+  filename            = data.archive_file.shared_layer.output_path
+  source_code_hash    = data.archive_file.shared_layer.output_base64sha256
+  compatible_runtimes = ["python3.12", "python3.13"]
+}
+
+# ── Lambda Function Archives ──────────────────────────────────────
+
+data "archive_file" "health" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/health"
+  output_path = "${path.module}/.build/health.zip"
+}
+
+data "archive_file" "get_presigned" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/get_presigned"
+  output_path = "${path.module}/.build/get_presigned.zip"
+}
+
+data "archive_file" "process_lecture" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/process_lecture"
+  output_path = "${path.module}/.build/process_lecture.zip"
+}
+
+data "archive_file" "list_lectures" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/list_lectures"
+  output_path = "${path.module}/.build/list_lectures.zip"
+}
+
+data "archive_file" "get_lecture" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/get_lecture"
+  output_path = "${path.module}/.build/get_lecture.zip"
+}
+
+data "archive_file" "chat_lecture" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/chat_lecture"
+  output_path = "${path.module}/.build/chat_lecture.zip"
+}
+
+data "archive_file" "delete_lecture" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/delete_lecture"
+  output_path = "${path.module}/.build/delete_lecture.zip"
+}
+
+# ── Lambda Functions ──────────────────────────────────────────────
+
+locals {
+  common_env = {
+    BEDROCK_REGION     = var.region
+    MODEL_ID           = var.model_id
+    EMBEDDING_MODEL_ID = var.embedding_model_id
+    UPLOAD_BUCKET_NAME = aws_s3_bucket.uploads.id
+    DYNAMODB_TABLE     = aws_dynamodb_table.lectures.name
+  }
+}
+
+resource "aws_lambda_function" "health" {
+  function_name    = "${local.name_prefix}-health"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.health.output_path
+  source_code_hash = data.archive_file.health.output_base64sha256
+  timeout          = 10
+  memory_size      = 128
+}
+
+resource "aws_lambda_function" "get_presigned" {
+  function_name    = "${local.name_prefix}-get-presigned"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.get_presigned.output_path
+  source_code_hash = data.archive_file.get_presigned.output_base64sha256
+  timeout          = 15
+  memory_size      = 128
+  layers           = [aws_lambda_layer_version.shared.arn]
+
+  environment {
+    variables = local.common_env
+  }
+}
+
+resource "aws_lambda_function" "process_lecture" {
+  function_name    = "${local.name_prefix}-process-lecture"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.process_lecture.output_path
+  source_code_hash = data.archive_file.process_lecture.output_base64sha256
+  timeout          = 300
+  memory_size      = 512
+  layers           = [aws_lambda_layer_version.shared.arn]
+
+  environment {
+    variables = local.common_env
+  }
+}
+
+resource "aws_lambda_function" "list_lectures" {
+  function_name    = "${local.name_prefix}-list-lectures"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.list_lectures.output_path
+  source_code_hash = data.archive_file.list_lectures.output_base64sha256
+  timeout          = 15
+  memory_size      = 128
+  layers           = [aws_lambda_layer_version.shared.arn]
+
+  environment {
+    variables = local.common_env
+  }
+}
+
+resource "aws_lambda_function" "get_lecture" {
+  function_name    = "${local.name_prefix}-get-lecture"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.get_lecture.output_path
+  source_code_hash = data.archive_file.get_lecture.output_base64sha256
+  timeout          = 15
+  memory_size      = 128
+  layers           = [aws_lambda_layer_version.shared.arn]
+
+  environment {
+    variables = local.common_env
+  }
+}
+
+resource "aws_lambda_function" "chat_lecture" {
+  function_name    = "${local.name_prefix}-chat-lecture"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.chat_lecture.output_path
+  source_code_hash = data.archive_file.chat_lecture.output_base64sha256
+  timeout          = 120
+  memory_size      = 256
+  layers           = [aws_lambda_layer_version.shared.arn]
+
+  environment {
+    variables = local.common_env
+  }
+}
+
+resource "aws_lambda_function" "delete_lecture" {
+  function_name    = "${local.name_prefix}-delete-lecture"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.delete_lecture.output_path
+  source_code_hash = data.archive_file.delete_lecture.output_base64sha256
+  timeout          = 15
+  memory_size      = 128
+  layers           = [aws_lambda_layer_version.shared.arn]
+
+  environment {
+    variables = local.common_env
+  }
+}
+
+# ── API Gateway Permissions ───────────────────────────────────────
+
+locals {
+  lambda_functions = {
+    health          = aws_lambda_function.health
+    get_presigned   = aws_lambda_function.get_presigned
+    process_lecture = aws_lambda_function.process_lecture
+    list_lectures   = aws_lambda_function.list_lectures
+    get_lecture      = aws_lambda_function.get_lecture
+    chat_lecture    = aws_lambda_function.chat_lecture
+    delete_lecture  = aws_lambda_function.delete_lecture
+  }
+}
+
+resource "aws_lambda_permission" "apigw" {
+  for_each = local.lambda_functions
+
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = each.value.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}

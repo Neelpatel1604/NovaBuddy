@@ -1,0 +1,17 @@
+# ── NovaBuddy Terraform Variables ─────────────────────────────────
+# Copy this file to terraform.tfvars and adjust values as needed.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+# Prefix used for all AWS resource names (S3 bucket, DynamoDB table, Lambdas, etc.)
+# A random hex suffix is appended automatically to ensure uniqueness.
+project_name = "novabuddy"
+
+# AWS region — must be one where Amazon Nova models are available on Bedrock.
+region = "us-east-1"
+
+# Bedrock model ID for reasoning (summaries, quizzes, chat).
+model_id = "amazon.nova-lite-v1:0"
+
+# Bedrock model ID for multimodal embeddings (stretch goal — not used in MVP).
+embedding_model_id = "amazon.nova-embed-multimodal-v1:0"
