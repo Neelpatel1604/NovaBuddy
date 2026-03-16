@@ -47,6 +47,13 @@ def handler(*, event, user_id, body, path_params, context):
 
     content_type = _content_type_from_filename(filename)
 
+    # Block unsupported types early so /process doesn't fail later
+    if content_type.startswith("video/"):
+        return error(
+            "Video files are not supported. Please upload PDFs, Word docs, PowerPoint, text, or images.",
+            400,
+        )
+
     lecture_id = str(uuid.uuid4())
     s3_key = f"{user_id}/{lecture_id}/{filename}"
 

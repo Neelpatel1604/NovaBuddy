@@ -33,6 +33,20 @@ resource "aws_s3_bucket_cors_configuration" "uploads" {
   }
 }
 
+# Trigger auto-processing Lambda when a new object is created in the uploads bucket
+resource "aws_s3_bucket_notification" "uploads_process_lecture" {
+  bucket = aws_s3_bucket.uploads.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.process_lecture.arn
+    events              = ["s3:ObjectCreated:*"]
+  }
+
+  depends_on = [
+    aws_lambda_permission.s3_invoke_process_lecture,
+  ]
+}
+
 # ── Generated Content Bucket (summary audio, video) ─────────────────
 
 data "aws_caller_identity" "current" {}

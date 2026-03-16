@@ -37,11 +37,15 @@ data "aws_iam_policy_document" "lambda_permissions" {
   # S3 (uploads bucket - user lecture files)
   statement {
     actions = [
+      "s3:ListBucket",
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject",
     ]
-    resources = ["${aws_s3_bucket.uploads.arn}/*"]
+    resources = [
+      aws_s3_bucket.uploads.arn,
+      "${aws_s3_bucket.uploads.arn}/*",
+    ]
   }
 
   # S3 (generated bucket - summary audio, video outputs)
@@ -304,4 +308,12 @@ resource "aws_lambda_permission" "apigw" {
   function_name = each.value.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "s3_invoke_process_lecture" {
+  statement_id  = "AllowS3InvokeProcessLecture"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.process_lecture.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.uploads.arn
 }
