@@ -11,14 +11,41 @@ dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(os.environ["DYNAMODB_TABLE"])
 bucket = os.environ["UPLOAD_BUCKET_NAME"]
 
+# Map file extensions to MIME types (frontend sends filename only)
+EXT_TO_MIME = {
+    ".pdf": "application/pdf",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+}
+
+
+def _content_type_from_filename(filename: str) -> str:
+    ext = os.path.splitext(filename.lower())[1]
+    return EXT_TO_MIME.get(ext, "application/octet-stream")
+
 
 @api_handler(requires_auth=True)
 def handler(*, event, user_id, body, path_params, context):
+    """
+    Accepts filename only. Infers content type from extension and returns
+    presigned S3 PUT URL for frontend to upload the file.
+    """
     filename = body.get("filename")
-    content_type = body.get("contentType")
 
-    if not filename or not content_type:
-        return error("filename and contentType are required", 400)
+    if not filename:
+        return error("filename is required", 400)
+
+    content_type = _content_type_from_filename(filename)
 
     lecture_id = str(uuid.uuid4())
     s3_key = f"{user_id}/{lecture_id}/{filename}"

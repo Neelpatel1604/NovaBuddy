@@ -1,6 +1,14 @@
 terraform {
   required_version = ">= 1.5"
 
+  cloud {
+    organization = "NovaBuddy"
+
+    workspaces {
+      name = "NovaBuddy"
+    }
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
