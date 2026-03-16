@@ -162,12 +162,6 @@ data "archive_file" "delete_lecture" {
   output_path = "${path.module}/.build/delete_lecture.zip"
 }
 
-data "archive_file" "generate_lecture_video" {
-  type        = "zip"
-  source_dir  = "${local.lambdas_dir}/generate_lecture_video"
-  output_path = "${path.module}/.build/generate_lecture_video.zip"
-}
-
 # ── Lambda Functions ──────────────────────────────────────────────
 
 locals {
@@ -288,24 +282,6 @@ resource "aws_lambda_function" "delete_lecture" {
   }
 }
 
-resource "aws_lambda_function" "generate_lecture_video" {
-  function_name    = "${local.name_prefix}-generate-lecture-video"
-  role             = aws_iam_role.lambda.arn
-  handler          = "handler.handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.generate_lecture_video.output_path
-  source_code_hash = data.archive_file.generate_lecture_video.output_base64sha256
-  timeout          = 300
-  memory_size      = 256
-  layers           = [aws_lambda_layer_version.shared.arn]
-
-  environment {
-    variables = merge(local.common_env, {
-      NOVA_REEL_INFERENCE_PROFILE = var.nova_reel_inference_profile
-    })
-  }
-}
-
 # ── API Gateway Permissions ───────────────────────────────────────
 
 locals {
@@ -317,7 +293,6 @@ locals {
     get_lecture            = aws_lambda_function.get_lecture
     chat_lecture           = aws_lambda_function.chat_lecture
     delete_lecture         = aws_lambda_function.delete_lecture
-    generate_lecture_video = aws_lambda_function.generate_lecture_video
   }
 }
 

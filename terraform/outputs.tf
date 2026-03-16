@@ -19,7 +19,7 @@ output "s3_bucket_name" {
 }
 
 output "s3_generated_bucket_name" {
-  description = "S3 generated bucket name (summary audio, video outputs)"
+  description = "S3 generated bucket name (summary audio outputs)"
   value       = aws_s3_bucket.generated.id
 }
 
