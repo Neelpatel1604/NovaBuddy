@@ -69,6 +69,18 @@ def handler(*, event, user_id, body, path_params, context):
     if not item:
         return error("Lecture not found", 404)
 
+    # Already processed — return cached data (no Bedrock calls)
+    if item.get("summary"):
+        return success(
+            {
+                "status": "completed",
+                "lectureId": lecture_id,
+                "summary": item.get("summary"),
+                "quizQuestionCount": len(json.loads(item.get("quiz_json") or "[]")),
+                "keyConcepts": item.get("key_concepts", ""),
+            }
+        )
+
     s3_key = item.get("s3_key")
     content_type = item.get("content_type", "application/pdf")
 
