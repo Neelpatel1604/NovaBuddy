@@ -45,4 +45,9 @@ resource "aws_cognito_user_pool_client" "main" {
   ]
 
   supported_identity_providers = ["COGNITO"]
+
+  # Allowed callback URLs (e.g. Amplify app) for redirect after sign-in
+  callback_urls = var.allowed_origins
+  # Allowed sign-out URLs for redirect after logout
+  logout_urls = var.allowed_origins
 }

@@ -48,14 +48,15 @@ Terraform outputs the values you need:
 
 ## Terraform Variables
 
-| Variable             | Default                                 | Description                                    |
-|----------------------|-----------------------------------------|------------------------------------------------|
-| `project_name`       | `novabuddy`                             | Prefix for all AWS resource names              |
-| `region`             | `us-east-1`                             | AWS region (must support Nova models)          |
-| `model_id`           | `amazon.nova-lite-v1:0`                 | Bedrock model ID for reasoning                 |
-| `embedding_model_id` | `amazon.nova-embed-multimodal-v1:0`     | Bedrock model ID for embeddings (stretch goal) |
+| Variable             | Default                                               | Description                                                                 |
+|----------------------|--------------------------------------------------------|-----------------------------------------------------------------------------|
+| `project_name`       | `novabuddy`                                           | Prefix for all AWS resource names                                           |
+| `region`             | `us-east-1`                                           | AWS region (must support Nova models)                                       |
+| `model_id`           | `amazon.nova-lite-v1:0`                               | Bedrock model ID for reasoning                                              |
+| `embedding_model_id` | `amazon.nova-embed-multimodal-v1:0`                    | Bedrock model ID for embeddings (stretch goal)                              |
+| `allowed_origins`    | `["https://main.d28f2w8xvnnyj5.amplifyapp.com"]`      | Frontend URLs for API Gateway CORS and Cognito callback/logout URLs         |
 
-See `terraform/terraform.tfvars.example` for a ready-to-use config file.
+See `terraform/terraform.tfvars.example` for a ready-to-use config file. For local dev, add e.g. `"http://localhost:3000"` to `allowed_origins`.
 
 ## Create a Test User
 
@@ -166,12 +167,12 @@ terraform destroy
 ```
 ├── terraform/
 │   ├── main.tf                    # Provider, random suffix
-│   ├── variables.tf               # Input variables
+│   ├── variables.tf               # Input variables (incl. allowed_origins)
 │   ├── terraform.tfvars.example   # Example variable values
 │   ├── outputs.tf                 # API URL, Cognito IDs, bucket name
-│   ├── cognito.tf                 # User Pool + App Client
+│   ├── cognito.tf                 # User Pool + App Client (callback/logout URLs)
 │   ├── storage.tf                 # S3 + DynamoDB
-│   ├── api_gateway.tf             # HTTP API, JWT authorizer, routes
+│   ├── api_gateway.tf             # HTTP API, JWT authorizer, CORS, routes
 │   └── lambdas.tf                 # IAM, Lambda functions, Layer, permissions
 ├── lambdas/
 │   ├── layer/python/shared/       # Shared utilities (Lambda Layer)
@@ -184,6 +185,8 @@ terraform destroy
 │   ├── get_lecture/               # GET  /lectures/{id}
 │   ├── chat_lecture/              # POST /lectures/{id}/chat
 │   └── delete_lecture/            # DELETE /lectures/{id}
+├── docs/
+│   └── ARCHITECTURE.md            # AWS architecture diagram + data flows
 ├── .gitignore
 ├── PRD.md
 └── README.md

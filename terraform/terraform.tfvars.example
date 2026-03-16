@@ -15,3 +15,7 @@ model_id = "amazon.nova-lite-v1:0"
 
 # Bedrock model ID for multimodal embeddings (stretch goal — not used in MVP).
 embedding_model_id = "amazon.nova-embed-multimodal-v1:0"
+
+# Allowed frontend origins: used for API Gateway CORS and Cognito callback/logout URLs.
+# Add your Amplify (or other) app URL; add "http://localhost:3000" etc. for local dev.
+allowed_origins = ["https://main.d28f2w8xvnnyj5.amplifyapp.com"]

@@ -21,3 +21,9 @@ variable "embedding_model_id" {
   type        = string
   default     = "amazon.nova-embed-multimodal-v1:0"
 }
+
+variable "allowed_origins" {
+  description = "Allowed frontend origins for CORS and Cognito (e.g. Amplify app URL)"
+  type        = list(string)
+  default     = ["https://main.d28f2w8xvnnyj5.amplifyapp.com"]
+}
