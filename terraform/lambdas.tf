@@ -34,7 +34,7 @@ data "aws_iam_policy_document" "lambda_permissions" {
     resources = [aws_dynamodb_table.lectures.arn]
   }
 
-  # S3
+  # S3 (uploads bucket - user lecture files)
   statement {
     actions = [
       "s3:GetObject",
@@ -44,10 +44,56 @@ data "aws_iam_policy_document" "lambda_permissions" {
     resources = ["${aws_s3_bucket.uploads.arn}/*"]
   }
 
-  # Bedrock
+  # S3 (generated bucket - summary audio, video outputs)
   statement {
-    actions   = ["bedrock:InvokeModel"]
-    resources = ["arn:aws:bedrock:${var.region}::foundation-model/*"]
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = ["${aws_s3_bucket.generated.arn}/*"]
+  }
+
+  # Bedrock sync (Converse, etc.) + US inference
+  statement {
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+    ]
+    resources = [
+      # Public foundation models (no account id)
+      "arn:aws:bedrock:${var.region}::foundation-model/*",
+      "arn:aws:bedrock:${var.region}::us.foundation-model/*",
+      # Account‑scoped models (custom / inference profiles that resolve to models in this account)
+      "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:foundation-model/*",
+      "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:us.foundation-model/*",
+    ]
+  }
+
+  # Bedrock async (Nova Reel video - StartAsyncInvoke)
+  statement {
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:StartAsyncInvoke",
+      "bedrock:GetAsyncInvoke",
+      "bedrock:ListAsyncInvokes",
+    ]
+    resources = [
+      # Public foundation models (no account id)
+      "arn:aws:bedrock:${var.region}::foundation-model/*",
+      "arn:aws:bedrock:${var.region}::us.foundation-model/*",
+      # Account‑scoped models (custom / inference profiles that resolve to models in this account)
+      "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:foundation-model/*",
+      "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:us.foundation-model/*",
+      # Async invoke jobs
+      "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:async-invoke/*",
+    ]
+  }
+
+  # Polly (text-to-speech - fallback/legacy)
+  statement {
+    actions   = ["polly:SynthesizeSpeech"]
+    resources = ["*"]
   }
 }
 
@@ -116,15 +162,22 @@ data "archive_file" "delete_lecture" {
   output_path = "${path.module}/.build/delete_lecture.zip"
 }
 
+data "archive_file" "generate_lecture_video" {
+  type        = "zip"
+  source_dir  = "${local.lambdas_dir}/generate_lecture_video"
+  output_path = "${path.module}/.build/generate_lecture_video.zip"
+}
+
 # ── Lambda Functions ──────────────────────────────────────────────
 
 locals {
   common_env = {
-    BEDROCK_REGION     = var.region
-    MODEL_ID           = var.model_id
-    EMBEDDING_MODEL_ID = var.embedding_model_id
-    UPLOAD_BUCKET_NAME = aws_s3_bucket.uploads.id
-    DYNAMODB_TABLE     = aws_dynamodb_table.lectures.name
+    BEDROCK_REGION       = var.region
+    MODEL_ID             = var.model_id
+    EMBEDDING_MODEL_ID   = var.embedding_model_id
+    UPLOAD_BUCKET_NAME   = aws_s3_bucket.uploads.id
+    GENERATED_BUCKET_NAME = aws_s3_bucket.generated.id
+    DYNAMODB_TABLE       = aws_dynamodb_table.lectures.name
   }
 }
 
@@ -235,17 +288,36 @@ resource "aws_lambda_function" "delete_lecture" {
   }
 }
 
+resource "aws_lambda_function" "generate_lecture_video" {
+  function_name    = "${local.name_prefix}-generate-lecture-video"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.generate_lecture_video.output_path
+  source_code_hash = data.archive_file.generate_lecture_video.output_base64sha256
+  timeout          = 300
+  memory_size      = 256
+  layers           = [aws_lambda_layer_version.shared.arn]
+
+  environment {
+    variables = merge(local.common_env, {
+      NOVA_REEL_INFERENCE_PROFILE = var.nova_reel_inference_profile
+    })
+  }
+}
+
 # ── API Gateway Permissions ───────────────────────────────────────
 
 locals {
   lambda_functions = {
-    health          = aws_lambda_function.health
-    get_presigned   = aws_lambda_function.get_presigned
-    process_lecture = aws_lambda_function.process_lecture
-    list_lectures   = aws_lambda_function.list_lectures
-    get_lecture      = aws_lambda_function.get_lecture
-    chat_lecture    = aws_lambda_function.chat_lecture
-    delete_lecture  = aws_lambda_function.delete_lecture
+    health                 = aws_lambda_function.health
+    get_presigned          = aws_lambda_function.get_presigned
+    process_lecture        = aws_lambda_function.process_lecture
+    list_lectures          = aws_lambda_function.list_lectures
+    get_lecture            = aws_lambda_function.get_lecture
+    chat_lecture           = aws_lambda_function.chat_lecture
+    delete_lecture         = aws_lambda_function.delete_lecture
+    generate_lecture_video = aws_lambda_function.generate_lecture_video
   }
 }
 

@@ -21,3 +21,9 @@ variable "embedding_model_id" {
   type        = string
   default     = "amazon.nova-embed-multimodal-v1:0"
 }
+
+variable "nova_reel_inference_profile" {
+  description = "Nova Reel model ID for Bedrock async invoke (e.g. amazon.nova-reel-v1:1)"
+  type        = string
+  default     = "amazon.nova-reel-v1:1"
+}

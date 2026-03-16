@@ -14,8 +14,13 @@ output "cognito_client_id" {
 }
 
 output "s3_bucket_name" {
-  description = "S3 uploads bucket name"
+  description = "S3 uploads bucket name (lecture files)"
   value       = aws_s3_bucket.uploads.id
+}
+
+output "s3_generated_bucket_name" {
+  description = "S3 generated bucket name (summary audio, video outputs)"
+  value       = aws_s3_bucket.generated.id
 }
 
 output "dynamodb_table_name" {

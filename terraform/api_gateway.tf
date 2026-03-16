@@ -103,6 +103,13 @@ resource "aws_apigatewayv2_integration" "delete_lecture" {
   payload_format_version = "2.0"
 }
 
+resource "aws_apigatewayv2_integration" "generate_lecture_video" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.generate_lecture_video.invoke_arn
+  payload_format_version = "2.0"
+}
+
 # ── Routes ────────────────────────────────────────────────────────
 
 resource "aws_apigatewayv2_route" "health" {
@@ -155,6 +162,14 @@ resource "aws_apigatewayv2_route" "delete_lecture" {
   api_id             = aws_apigatewayv2_api.main.id
   route_key          = "DELETE /api/v1/lectures/{lectureId}"
   target             = "integrations/${aws_apigatewayv2_integration.delete_lecture.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+resource "aws_apigatewayv2_route" "generate_lecture_video" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /api/v1/lectures/{lectureId}/video"
+  target             = "integrations/${aws_apigatewayv2_integration.generate_lecture_video.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
